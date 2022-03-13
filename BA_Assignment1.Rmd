@@ -1,0 +1,169 @@
+---
+title: "Madhusudhan Masineni"
+output:
+  pdf_document: default
+  html_document: default
+date: '2022-03-13'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an assignment 1
+
+```{r }
+# assignment 1 -  online retail ::
+
+rm(list=ls())
+
+library(dplyr)
+library(readr)
+library(magrittr)
+library(reshape2)
+retail_df <- read.csv("/Users/madhusudhanmasineni/Downloads/R/Online_Retail.csv")
+
+head(retail_df)
+
+#1. Show the breakdown of the number of transactions by countries i.e. how many 
+#transactions are in the dataset for each country (consider all records including
+#cancelled transactions). Show this in total number and also in percentage. 
+#Show only countries accounting for more than 1% of the total transactions.
+
+attach(retail_df)
+
+glimpse(retail_df)
+dim(retail_df)
+summary(retail_df)
+
+# 1 mutate, n(), filter 
+
+count_countries <- retail_df %>% group_by(Country) %>% summarise(country_txn = n())
+total_txns <- nrow(retail_df) #sum(count_countries$country_txn)
+percent <- round(100*(count_countries$country_txn/total_txns), digits=2)
+print(subset(cbind(count_countries,percent),percent > 1))
+
+# The other way ::
+country_txns <- table(Country)
+txn_percent <- round(100*prop.table(country_txns),digits=2)
+percentage <- cbind(country_txns,txn_percent)
+print(subset(percentage,txn_percent>1))
+
+# 2. Create a new variable 'TransactionValue' that is the product of the exising 
+#'Quantity' and 'UnitPrice' variables. Add this variable to the dataframe
+
+
+retail_df1 <- retail_df %>% mutate(TransactionValue = Quantity * UnitPrice)
+summarise(retail_df1)
+glimpse(retail_df1)
+
+
+  #3. Using the newly created variable, TransactionValue, show the breakdown of transaction values 
+#by countries i.e. how much money in total has been spent each country. Show this in total sum of 
+#transaction values. Show only countries with total transaction exceeding 130,000 British Pound.
+
+attach(retail_df1)
+new_df <- summarise(group_by(retail_df1, retail_df1$Country), sum(TransactionValue))
+Transaction <- filter(new_df, new_df$`sum(TransactionValue)` >130000)
+glimpse(Transaction)
+
+
+#4. Optional
+Temp=strptime(retail_df1$InvoiceDate,format='%m/%d/%Y %H:%M',tz='GMT')
+head(Temp)
+retail_df1$New_Invoice_Date <- as.Date(Temp)
+retail_df1$New_Invoice_Date[20000]-retail_df1$New_Invoice_Date[10]
+retail_df1$Invoice_Day_Week = weekdays(retail_df1$New_Invoice_Date)
+retail_df1$New_Invoice_Hour = as.numeric(format(Temp, "%H"))
+retail_df1$New_Invoice_Month = as.numeric(format(Temp, "%m"))
+
+# a) Show the percentage of transactions (by numbers) by days of the week 
+
+a<-summarise(group_by(retail_df1,Invoice_Day_Week),Transaction_Value=n_distinct(InvoiceNo))
+a1<-mutate(a, transaction_percent=(Transaction_Value/sum(Transaction_Value))*100)
+a1
+
+# b) Show the percentage of transactions (by transaction volume) by days of the week
+
+b <- summarise(group_by(retail_df1,Invoice_Day_Week),Transaction_Volume=sum(TransactionValue))
+b1 <- mutate(b,percentage=(Transaction_Volume/sum(Transaction_Volume))*100)
+b1
+
+# c) Show the percentage of transactions (by transaction volume) by month of the year
+c<-summarise(group_by(retail_df1,New_Invoice_Month),Transaction_Volume=sum(TransactionValue))
+c1<-mutate(c,percentage=(Transaction_Volume/sum(Transaction_Volume))*100)
+c1
+
+#d)What was the date with the highest number of transactions from Australia? 
+retail_df1 %>% filter(Country == 'Australia') %>% group_by(New_Invoice_Date) %>% summarise(max=max(TransactionValue))
+
+
+# 5. Plot the histogram of transaction values from Germany. Use the hist() function to plot.
+
+germany_data <- subset(retail_df1$TransactionValue, retail_df1$Country == "Germany")
+hist(germany_data, xlim=c(-400, 600), breaks = 150, xlab="Txns Of Germany", main="Germany")
+
+# 6. Which customer had the highest number of transactions? Which customer is most valuable (i.e. highest total sum of transactions)?
+
+retail_df2 <- na.omit(retail_df1)
+res <- summarise(group_by(retail_df2,CustomerID), sum2= sum(TransactionValue))
+res[which.max(res$sum2),]
+
+#14646 has highest number of transactions 279489
+
+dt1 <- as.data.frame(table(retail_df1$CustomerID))
+dt1[which.max(dt1$Freq),]
+
+#17841 custId has highest nof txns
+
+# 7. Calculate the percentage of missing values for each variable in the dataset
+
+colMeans(is.na(retail_df)*100)
+
+# 8. What are the number of transactions with missing CustomerID records by countries?
+int_res <- retail_df %>% filter(is.na(CustomerID)) %>% group_by(Country)
+glimpse(int_res$Country)
+summary(int_res$Country)
+
+#9. On average, how often the costumers comeback to the website for their next shopping? 
+#(i.e. what is the average number of days between consecutive shopping)
+
+visit <- retail_df1 %>%
+  group_by(InvoiceNo, CustomerID, Country, New_Invoice_Date, New_Invoice_Month, New_Invoice_Hour, Invoice_Day_Week) %>%
+  summarise(orderVal = sum(TransactionValue)) %>%
+  mutate(recent = Sys.Date() - New_Invoice_Date) %>%
+  ungroup()
+
+visit$recent <- as.character(visit$recent)
+visit$recentDays <- sapply(visit$recent, FUN = function(x) {strsplit(x, split = '[ ]')[[1]][1]})
+visit$recentDays <- as.integer(visit$recentDays)
+
+head(visit, n = 5)
+
+attach(visit)
+custVisit <- retail_df1 %>%
+  group_by(CustomerID, Country) %>%
+  summarise(orders = n_distinct(InvoiceNo), revenue = sum(TransactionValue), 
+            mostDay = names(which.max(table(Invoice_Day_Week))), mostHour = names(which.max(table(New_Invoice_Hour))),
+            recency = min(recentDays))%>%
+  ungroup()
+
+head(custVisit)
+
+
+
+# 10. In the retail sector, it is very important to understand the return rate of the 
+#goods purchased by customers. In this example, we can define this quantity, simply, 
+#as the ratio of the number of transactions cancelled (regardless of the transaction value)
+#over the total number of transactions. With this definition, 
+#what is the return rate for the French customers?
+
+france_df <- (filter(retail_df1,retail_df1$Country=="France"))
+cancelled <- nrow(subset(france_df, retail_df1$TransactionValue < 0))
+cancelled
+not_cancelled <- nrow(retail_df1) - cancelled
+(cancelled/not_cancelled)
+
+```
